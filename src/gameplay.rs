@@ -4,68 +4,91 @@ use crate::prelude::*;
 // User input system
 pub fn pacman_input_system(
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut query: Query<&mut Pacman>,
+    mut pacman_query: Query<&mut Pacman>,
 ) {
-    for mut pacman in query.iter_mut() {
-        // Check for key presses and update Pac-Man's direction accordingly
-        if keyboard_input.pressed(KeyCode::ArrowUp) {
-            //println!("UP PRESSED");
-            pacman.direction = Vec2::new(0.0, 1.0); // Up
+    for mut pacman in pacman_query.iter_mut() {
+        let new_direction = if keyboard_input.pressed(KeyCode::ArrowUp) {
+            Some(PacManDirection::Up)
         } else if keyboard_input.pressed(KeyCode::ArrowDown) {
-            pacman.direction = Vec2::new(0.0, -1.0); // Down
-           // println!("DOWN PRESSED");
+            Some(PacManDirection::Down)
         } else if keyboard_input.pressed(KeyCode::ArrowLeft) {
-            pacman.direction = Vec2::new(-1.0, 0.0); // Left
+            Some(PacManDirection::Left)
         } else if keyboard_input.pressed(KeyCode::ArrowRight) {
-            pacman.direction = Vec2::new(1.0, 0.0); // Right
-        } /*else {
-            pacman.direction = Vec2::ZERO;
-        }*/
-    }
-}
-
-// Pac-Man Node Movement System
-
-// Pac-Man Movement System
-pub fn pacman_collision_based_movement_system(
-    time: Res<Time>, 
-    map: Res<Map>, // Access the map to check for walls
-    mut query: Query<(&mut Transform, &mut Pacman)>
-) {
-    for (mut transform, mut pacman) in query.iter_mut() {
-
-
-        // Calculate movement based on direction and speed
-        let delta_movement = pacman.direction * pacman.speed * time.delta_seconds();
-        let proposed_position = transform.translation + Vec3::new(delta_movement.x,delta_movement.y,0.0);
-        // println!("proposed position = {}",proposed_position);
-
-        // Convert the proposed position to grid coordinates
-        // Trying to add room to keep Pac-Man from running THROUGH wall tiles
-        let offset_x = if pacman.direction.x > 0.0 { pacman.radius } else if pacman.direction.x < 0.0 { -pacman.radius } else { 0.0 };
-        let offset_y = if pacman.direction.y > 0.0 { pacman.radius } else if pacman.direction.y < 0.0 { -pacman.radius } else { 0.0 };
-        
-        let proposed_grid_x = ((proposed_position.x + offset_x + SCREEN_WIDTH / 2.0) / TILE_SIZE).floor() as i32;
-        let proposed_grid_y = ((proposed_position.y + offset_y + SCREEN_HEIGHT / 2.0) / TILE_SIZE).floor() as i32;        
-
-        
-        // Check if the proposed tile is a wall
-        if map.is_wall(proposed_grid_x,proposed_grid_y) {
-            // Stop Pac-Man if the next tile is a wall
-            println!("x:{},y{} is wall",proposed_grid_x,proposed_grid_y);
-            pacman.direction = Vec2::ZERO;
-            println!("Pac-Man blocked by a wall at ({}, {})", proposed_grid_x, proposed_grid_y);
+            Some(PacManDirection::Right)
         } else {
-            // Move Pac-Man to the proposed position
-            transform.translation = proposed_position;
+            None
+        };
 
-            // Update grid_position as Pac-Man moves into a new grid cell
-            if pacman.grid_position != (proposed_grid_x, proposed_grid_y) {
-                // Update Pac-Man's grid position to the new cell
-                pacman.grid_position = (proposed_grid_x, proposed_grid_y);
-                println!("Pac-Man moved to a new grid position: {:?}", pacman.grid_position);
+        if let Some(direction) = new_direction {
+            // If Pac-Man is currently stopped, start moving in the new direction
+            if pacman.node_direction == PacManDirection::Stop {
+                pacman.node_direction = direction;
+                pacman.queued_direction = None; // Clear the queue since we're starting immediately
+            } else {
+                // Otherwise, queue the new direction to apply at the next node
+                pacman.queued_direction = Some(direction);
             }
         }
     }
 }
 
+// Pac-Man Node Movement System
+pub fn pacman_node_based_movement_system(
+    time: Res<Time>, 
+    mut pacman_query: Query<(&mut Pacman, &mut Transform)>,
+    node_query: Query<&MapNode>,
+) {
+    for (mut pacman, mut transform) in pacman_query.iter_mut() {
+        // Calculate incremental movement based on direction and speed
+        let movement_distance = pacman.speed * time.delta_seconds();
+        let delta_movement = match pacman.node_direction {
+            PacManDirection::Up => Vec2::new(0.0, movement_distance),
+            PacManDirection::Down => Vec2::new(0.0, -movement_distance),
+            PacManDirection::Left => Vec2::new(-movement_distance, 0.0),
+            PacManDirection::Right => Vec2::new(movement_distance, 0.0),
+            PacManDirection::Stop => Vec2::ZERO,
+        };
+
+        // Apply incremental movement based on `delta_movement`
+        let new_position = Vec2::new(transform.translation.x, transform.translation.y) + delta_movement;
+        transform.translation = Vec3::new(new_position.x, new_position.y, transform.translation.z);
+        
+        // Check if Pac-Man has overshot or reached the target node
+        if pacman.overshot_target(&transform, &node_query) {
+            let target_node = pacman.get_new_target(pacman.node_direction, &node_query);
+
+            // Align Pac-Man exactly to the node's position
+            if let Ok(node) = node_query.get(target_node) {
+                transform.translation = Vec3::new(node.position.x, node.position.y, transform.translation.z);
+                pacman.current_node = target_node;
+                pacman.node_position = node.position;
+
+                // Apply queued direction if valid; otherwise, maintain the current direction or stop
+                if let Some(queued_direction) = pacman.queued_direction {
+                    if pacman.valid_direction(queued_direction, &node_query) {
+                        pacman.node_direction = queued_direction;
+                        pacman.queued_direction = None;
+                    }
+                }
+
+                // Set the next target based on current direction, or stop if there is none
+                /*
+                let new_target = pacman.get_new_target(pacman.node_direction, &node_query);
+                if new_target != pacman.current_node {
+                    // pacman.current_node = new_target;
+                    pacman.target_node = new_target;
+                } else {
+                    pacman.node_direction = PacManDirection::Stop;
+                }
+                 
+                if !pacman.valid_direction(pacman.node_direction, &node_query) {
+                    pacman.node_direction = PacManDirection::Stop;
+                }
+                */
+            }
+        } else {
+            println!("Pacman has not overshot target");
+        }
+    }
+    
+}

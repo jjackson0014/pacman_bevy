@@ -119,7 +119,7 @@ impl Map {
             }
             let font_handle = asset_server.load("fonts/FiraSans-Bold.ttf"); // Make sure the font path is correct
             for x in 0..MAP_WIDTH {
-                let x_position = x as f32 * TILE_SIZE - SCREEN_WIDTH / 2.0 + TILE_SIZE / 2.0;
+                let x_position = x as f32 * TILE_SIZE - SCREEN_WIDTH / 2.0; // + TILE_SIZE / 2.0;
                 let label_text = Text::from_section(
                     x.to_string(),
                     TextStyle {
@@ -132,13 +132,13 @@ impl Map {
                 // Column labels
                 commands.spawn(Text2dBundle {
                     text: label_text.clone(),
-                    transform: Transform::from_xyz(x_position, SCREEN_HEIGHT / 2.0 - TILE_SIZE / 2.0, 1.0),
+                    transform: Transform::from_xyz(x_position, SCREEN_HEIGHT / 2.0, 1.0),
                     ..Default::default()
                 });
             }
         
             for y in 0..MAP_HEIGHT {
-                let y_position = -(y as f32 * TILE_SIZE - SCREEN_HEIGHT / 2.0 + TILE_SIZE / 2.0);
+                let y_position = -(y as f32 * TILE_SIZE - SCREEN_HEIGHT / 2.0 ); //+ TILE_SIZE / 2.0
                 let label_text = Text::from_section(
                     y.to_string(),
                     TextStyle {
@@ -151,7 +151,7 @@ impl Map {
                 // Row labels
                 commands.spawn(Text2dBundle {
                     text: label_text,
-                    transform: Transform::from_xyz(-SCREEN_WIDTH / 2.0 + TILE_SIZE / 2.0, y_position, 1.0),
+                    transform: Transform::from_xyz(-SCREEN_WIDTH / 2.0, y_position, 1.0),
                     ..Default::default()
                 });
             }

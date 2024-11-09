@@ -4,43 +4,113 @@ use crate::prelude::*;
 #[derive(Component)]
 pub struct Pacman{
     pub radius: f32,
-    pub grid_position: (i32,i32),
+    // pub grid_position: (i32,i32),
+    pub node_position: Vec2,
     pub speed: f32,
-    pub direction: Vec2, // Vec with Direction
+    // pub vec_direction: Vec2, // Vec with Direction
+    pub node_direction: PacManDirection,  // Up Right Down Left for Node Movement
+    pub queued_direction: Option<PacManDirection>,
+    pub current_node: Entity,
+    pub target_node: Vec2,
 }
 
 // Constants
 const RADIUS: f32 = 8.0;
 
-// Spawn a new Pac-Man
-pub fn spawn_pacman (mut commands: Commands) {
-    let color = YELLOW;
-    let x = 14 as usize;
-    let y = 16 as usize;
-    let x_position = x as f32 * TILE_SIZE - SCREEN_WIDTH / 2.0 + TILE_SIZE / 2.0;
-    let y_position = -(y as f32 * TILE_SIZE - SCREEN_HEIGHT / 2.0 + TILE_SIZE / 2.0);
-    println!("x = {}, y = {}, xval = {}, yval = {}", x, y, x_position, y_position);
-    
-    commands.spawn((
-        SpriteBundle {
-            sprite: Sprite {
-                color,
-                custom_size: Some(Vec2::new(TILE_SIZE,TILE_SIZE)),
-                ..Default::default()
-            },
-            transform: Transform::from_xyz(x_position, y_position, 1.0),
-            ..Default::default()
-        },
-        Pacman{
-            // Radius
+// Implementation
+impl Pacman {
+    pub fn new(
+        node_position: Vec2, 
+        current_node: Entity, 
+        queued_direction: Option<PacManDirection>,
+        target_node: Vec2,
+    ) -> Self {
+        Pacman {
             radius: RADIUS,
-            // Position
-            grid_position: (x as i32,y as i32),
-            // Speed
-            speed: 100.0 * (TILE_SIZE/16.0),
-            // Direction
-            direction: Vec2::ZERO,
+            node_position,
+            speed: 100.0 * (TILE_SIZE / 16.0),
+            node_direction: PacManDirection::Stop,
+            // vec_direction: Vec2::ZERO,
+            queued_direction,
+            current_node,
+            target_node,
         }
+    }
 
-    ));
+    // Find a node to spawn pacman
+    pub fn find_spawn_node(node_query: &Query<&MapNode>) -> Vec2{
+        // Spawn on a particular Node
+        if let Some(node) = node_query.iter().next() {
+            node.position // Use the first node's position
+        } else {
+            Vec2::new(0.0, 0.0) // Default to (0,0) if no nodes are found
+        }
+    }
+
+
+    // Spawn a new Pac-Man
+    pub fn spawn_pacman (
+        mut commands: Commands,
+        node_query: Query<(Entity, &MapNode)>
+    ) {
+        if let Some((node_entity, node)) = node_query.iter().next() {
+            let spawn_node_position = node.position;
+            commands.spawn((
+                Pacman::new(spawn_node_position, node_entity, None,spawn_node_position),
+                SpriteBundle {
+                    sprite: Sprite {
+                        color: YELLOW,
+                        custom_size: Some(Vec2::splat(TILE_SIZE * 0.8)),
+                        ..Default::default()
+                    },
+                    transform: Transform::from_translation(Vec3::new(spawn_node_position.x, spawn_node_position.y, 1.0)),
+                    ..Default::default()
+                },
+            ));
+        }
+    }
+
+     // Check if a given direction is valid (i.e., there's a neighbor in that direction)
+     pub fn valid_direction(&self, direction: PacManDirection, node_query: &Query<&MapNode>) -> bool {
+        if let Ok(node) = node_query.get(self.current_node) {
+            return node.neighbors.contains_key(&direction) && direction != PacManDirection::Stop;
+        }
+        false
+    }
+
+    // Get the new target node in a specified direction, or return the current node if invalid
+    pub fn get_new_target(&self, direction: PacManDirection, node_query: &Query<&MapNode>) -> Entity {
+        if let Ok(node) = node_query.get(self.current_node) {
+            if self.valid_direction(direction, node_query) {
+                if let Some(Some(target_node)) = node.neighbors.get(&direction) {
+                    println!("Target{}",*target_node);
+                    return *target_node;
+                }
+            }
+        }
+        
+        self.current_node // Return current node if no valid target
+    }
+
+    // Determine if Pac-Man is going to move past the target node
+    pub fn overshot_target(&self, transform: &Transform, node_query: &Query<&MapNode>) -> bool {
+        if let Ok(target_node) = node_query.get(self.get_new_target(self.node_direction, node_query)) {
+            if let Ok(current_node) = node_query.get(self.current_node) {
+                // Vector from current node to target node and from current node to Pac-Man
+                let vec_to_target = target_node.position - current_node.position;
+                let vec_to_pacman = Vec2::new(transform.translation.x, transform.translation.y) - current_node.position;
+                
+                // Compare distances squared to check if Pac-Man has reached or passed the target node
+                vec_to_pacman.length_squared() >= vec_to_target.length_squared() // || vec_to_pacman.dot(vec_to_target) > 0.0
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    }
 }
+
+
+
+

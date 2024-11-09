@@ -1,10 +1,13 @@
 // Modules
 mod map;
 use map::Map;
-mod pacman;
-mod gameplay;
 mod node;
 use node::NodeGroup;
+mod pacman;
+use pacman::Pacman;
+mod gameplay;
+
+
 
 // Prelude
 mod prelude {
@@ -25,6 +28,7 @@ mod prelude {
 
     pub use crate::map::*;
     pub use crate::pacman::*;
+    pub use crate::node::*;
     pub use crate::gameplay::*;
 }
 
@@ -46,12 +50,13 @@ pub fn main() {
                 node::setup_node_group,
                 node::render_nodes_as_quads,
                 spawn_camera,
-                pacman::spawn_pacman
+                pacman::Pacman::spawn_pacman
             ).chain()
         )
         .add_systems(Update, (
             gameplay::pacman_input_system,
-            gameplay::pacman_collision_based_movement_system
+            //gameplay::pacman_collision_based_movement_system
+            gameplay::pacman_node_based_movement_system,
         )
         //.chain()
         )
