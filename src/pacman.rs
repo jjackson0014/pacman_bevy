@@ -11,7 +11,7 @@ pub struct Pacman{
     pub node_direction: PacManDirection,  // Up Right Down Left for Node Movement
     pub queued_direction: Option<PacManDirection>,
     pub current_node: Entity,
-    pub target_node: Vec2,
+    pub target_node: Option<Entity>,
 }
 
 // Constants
@@ -23,7 +23,6 @@ impl Pacman {
         node_position: Vec2, 
         current_node: Entity, 
         queued_direction: Option<PacManDirection>,
-        target_node: Vec2,
     ) -> Self {
         Pacman {
             radius: RADIUS,
@@ -33,7 +32,7 @@ impl Pacman {
             // vec_direction: Vec2::ZERO,
             queued_direction,
             current_node,
-            target_node,
+            target_node: None,
         }
     }
 
@@ -56,7 +55,7 @@ impl Pacman {
         if let Some((node_entity, node)) = node_query.iter().next() {
             let spawn_node_position = node.position;
             commands.spawn((
-                Pacman::new(spawn_node_position, node_entity, None,spawn_node_position),
+                Pacman::new(spawn_node_position, node_entity, None),
                 SpriteBundle {
                     sprite: Sprite {
                         color: YELLOW,
