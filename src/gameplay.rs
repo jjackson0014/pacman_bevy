@@ -27,7 +27,7 @@ pub fn pacman_input_system(
                 pacman.set_direction_and_target(direction, &node_query, false);
                 pacman.queued_direction = None; // Clear the queue since we're starting immediately
                 println!("New Direction: {:?}", pacman.node_direction);
-            // Reverse?
+            // Reverse
             } else if pacman.node_direction.opposite() == direction {
                 pacman.set_direction_and_target(direction, &node_query, true);
                 pacman.queued_direction = None;
@@ -36,6 +36,9 @@ pub fn pacman_input_system(
                 // Otherwise, queue the new direction to apply at the next node
                 pacman.queued_direction = Some(direction);
             }
+        } else {
+            let old_direction = pacman.node_direction;
+            pacman.set_direction_and_target(old_direction, &node_query, false);
         }
     }
 }
