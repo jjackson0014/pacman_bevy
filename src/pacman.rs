@@ -12,6 +12,7 @@ pub struct Pacman{
     pub queued_direction: Option<PacManDirection>,
     pub current_node: Entity,
     pub target_node: Option<Entity>,
+    pub is_reversing: bool,
 }
 
 // Constants
@@ -33,6 +34,7 @@ impl Pacman {
             queued_direction,
             current_node,
             target_node: None,
+            is_reversing: false,
         }
     }
 
@@ -94,11 +96,21 @@ impl Pacman {
         &mut self, 
         new_direction: PacManDirection, 
         node_query: &Query<&MapNode>,
+        is_reverse: bool,
     ) {
         // Update Pac-Man's direction
         self.node_direction = new_direction;
+
+        let origin_node = self.current_node;
+
+        // Reversing
+        if is_reverse {
+            if let Some(target) = self.target_node{
+                self.current_node = target;
+            }
+            self.target_node = Some(origin_node);
+        }
         
-        // Get the next target node in the specified direction
         let next_node = self.get_new_target(new_direction, node_query);
         
         // If a valid target node exists, set it as the target node

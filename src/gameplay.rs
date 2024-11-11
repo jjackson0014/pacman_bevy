@@ -24,14 +24,14 @@ pub fn pacman_input_system(
         if let Some(direction) = new_direction {
             // If Pac-Man is currently stopped, start moving in the new direction
             if pacman.node_direction == PacManDirection::Stop {
-                pacman.set_direction_and_target(direction, &node_query);
+                pacman.set_direction_and_target(direction, &node_query, false);
                 pacman.queued_direction = None; // Clear the queue since we're starting immediately
                 println!("New Direction: {:?}", pacman.node_direction);
             // Reverse?
             } else if pacman.node_direction.opposite() == direction {
-                pacman.set_direction_and_target(direction, &node_query);
+                pacman.set_direction_and_target(direction, &node_query, true);
                 pacman.queued_direction = None;
-                println!("Reverse Input Detected{:?}", pacman.node_direction)
+                println!("Reverse Input Detected{:?}", pacman.node_direction);
             } else {
                 // Otherwise, queue the new direction to apply at the next node
                 pacman.queued_direction = Some(direction);
@@ -73,7 +73,7 @@ pub fn pacman_node_based_movement_system(
                     // Apply queued direction if valid; otherwise, maintain the current direction or stop
                     if let Some(queued_direction) = pacman.queued_direction {
                         if pacman.valid_direction(queued_direction, &node_query) {
-                            pacman.set_direction_and_target(queued_direction, &node_query);
+                            pacman.set_direction_and_target(queued_direction, &node_query, false);
                             pacman.queued_direction = None;
                         }
                     }
