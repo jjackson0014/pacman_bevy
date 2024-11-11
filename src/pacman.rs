@@ -82,13 +82,33 @@ impl Pacman {
         if let Ok(node) = node_query.get(self.current_node) {
             if self.valid_direction(direction, node_query) {
                 if let Some(Some(target_node)) = node.neighbors.get(&direction) {
-                    println!("Target{}",*target_node);
                     return *target_node;
                 }
             }
         }
-        
         self.current_node // Return current node if no valid target
+    }
+
+    /// Sets Pac-Man's direction and updates the target node to the next node in that direction.
+    pub fn set_direction_and_target(
+        &mut self, 
+        new_direction: PacManDirection, 
+        node_query: &Query<&MapNode>,
+    ) {
+        // Update Pac-Man's direction
+        self.node_direction = new_direction;
+        
+        // Get the next target node in the specified direction
+        let next_node = self.get_new_target(new_direction, node_query);
+        
+        // If a valid target node exists, set it as the target node
+        if next_node != self.current_node {
+            self.target_node = Some(next_node);
+        } else {
+            // If no valid target, stop Pac-Man
+            self.node_direction = PacManDirection::Stop;
+            self.target_node = None;
+        }
     }
 
     // Determine if Pac-Man is going to move past the target node
@@ -108,6 +128,9 @@ impl Pacman {
             false
         }
     }
+
+
+
 }
 
 

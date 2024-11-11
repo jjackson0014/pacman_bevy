@@ -10,6 +10,17 @@ pub enum PacManDirection {
     Stop,
 }
 
+impl PacManDirection {
+    pub fn opposite(&self) -> PacManDirection {
+        match *self {
+            PacManDirection::Up => PacManDirection::Down,
+            PacManDirection::Down => PacManDirection::Up,
+            PacManDirection::Left => PacManDirection::Right,
+            PacManDirection::Right => PacManDirection::Left,
+            PacManDirection::Stop => PacManDirection::Stop,
+        }
+    }
+}
 
 // Create individual Node Component
 #[derive(Component)]
