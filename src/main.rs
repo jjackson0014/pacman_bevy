@@ -3,6 +3,7 @@ mod map;
 use map::Map;
 mod node;
 use node::NodeGroup;
+use node::Maze;
 mod pacman;
 use pacman::Pacman;
 mod gameplay;
@@ -14,11 +15,14 @@ mod prelude {
     // Crates
     pub use bevy::{prelude::*, sprite::MaterialMesh2dBundle}; // 0.14
     pub use std::collections::HashMap;
+    pub use std::fs::File;
+    pub use std::io::{self, BufRead};
+    pub use std::path::Path;
     // Tile-Based Grid Constants:
     // Our tiles are going to be 16x16 pixels and the
     // screen will be 448x512, so 28 columns and 32 rows
     pub const TILE_SIZE: f32 = 16.0;
-    pub const SCREEN_WIDTH: f32 = 448.0;
+    pub const SCREEN_WIDTH: f32 = 464.0;
     pub const SCREEN_HEIGHT: f32 = 512.0;
 
     // Colors
@@ -43,11 +47,15 @@ pub fn main() {
         )
         .insert_resource(Map::new())
         .insert_resource(NodeGroup::new())
+        // .insert_resource(Maze::new("/assets/mazes/maze_test.txt"))
         .add_systems(
             Startup, 
             (
                 map::setup_map_system,
-                node::setup_node_group,
+                node::load_maze,
+                // node::setup_node_group,
+                node::maze_to_nodes,
+                node::assign_neighbors,
                 node::render_nodes_as_quads,
                 spawn_camera,
                 pacman::Pacman::spawn_pacman

@@ -22,6 +22,49 @@ impl PacManDirection {
     }
 }
 
+// Create a maze resource to be used in node building
+// Define Cell Types
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum MazeCell {
+    Empty,
+    Node,
+    Path,
+}
+
+#[derive(Debug, Clone, PartialEq, Resource)]
+pub struct Maze {
+    grid: Vec<Vec<MazeCell>>,
+}
+
+impl Maze {
+    
+    pub fn new() -> io::Result<Self> {
+        Self::read_map("assets/mazes/maze_test.txt")
+    }
+
+    pub fn read_map(filename: &str) -> io::Result<Self> {
+        let file = File::open(filename)?;
+        let reader = io::BufReader::new(file);
+
+        let mut grid = Vec::new();
+
+        for line in reader.lines() {
+            let line = line?.trim().to_string();  // Trim whitespace around each line
+            let row: Vec<MazeCell> = line.split_whitespace().map(|c| match c {
+                "X" => MazeCell::Empty,
+                "+" => MazeCell::Node,
+                "." => MazeCell::Path,
+                _ => MazeCell::Empty, // Default to empty for unrecognized chars
+            }).collect();
+            grid.push(row);
+        }
+        
+        Ok(Maze { grid })
+    }
+
+    //
+}
+
 // Create individual Node Component
 #[derive(Component)]
 pub struct MapNode {
@@ -46,104 +89,111 @@ impl MapNode {
 // Group Nodes together
 #[derive(Resource)]
 pub struct NodeGroup {
-    node_list: Vec<Entity>,
+    node_list: HashMap<(usize, usize), Entity>,
 }
 
 impl NodeGroup {
     pub fn new() -> Self {
         NodeGroup {
-            node_list: Vec::new(),
+            node_list: HashMap::new(),
         }
     }
-    pub fn setup_test_nodes(&mut self, commands: &mut Commands) {
-        // Create nodes with specified positions
-        let node_a = commands.spawn(MapNode::new(-80.0, -80.0)).id();
-        let node_b = commands.spawn(MapNode::new(0.0, -80.0)).id();
-        let node_c = commands.spawn(MapNode::new(-80.0, 0.0)).id();
-        let node_d = commands.spawn(MapNode::new(0.0, 0.0)).id();
-        let node_e = commands.spawn(MapNode::new(80.0, 0.0)).id();
-        let node_f = commands.spawn(MapNode::new(-80.0, 160.0)).id();
-        let node_g = commands.spawn(MapNode::new(80.0, 160.0)).id();
 
-        // Store node entities in the node list
-        self.node_list = vec![node_a, node_b, node_c, node_d, node_e, node_f, node_g];
+    pub fn setup_nodes(
+        &mut self, 
+        mut commands: Commands, 
+        maze: Res<Maze>
+    ) {
+        // Determine offsets for each tile
+        let x_offset = -SCREEN_WIDTH / 2.0 + TILE_SIZE;
+        let y_offset = SCREEN_HEIGHT / 2.0 - TILE_SIZE;
 
-        // Define neighbor relationships
-        commands.entity(node_a).insert(MapNode {
-            neighbors: HashMap::from([
-                (PacManDirection::Right, Some(node_b)),
-                (PacManDirection::Down, None),
-                (PacManDirection::Up, Some(node_c)),
-                (PacManDirection::Left, None),
-            ]),
-            ..MapNode::new(-80.0, -80.0)
-        });
+        let mut nodes = HashMap::new(); // Store nodes by (x, y) positions
+
+        // Create nodes for each walkable cell and store their entities
+        for (y, row) in maze.grid.iter().enumerate() {
+            for (x, cell) in row.iter().enumerate() {
+                if *cell == MazeCell::Node {
+                    let x_position = x as f32 * TILE_SIZE + x_offset;
+                    let y_position = -(y as f32 * TILE_SIZE) + y_offset;
+                    
+                    let node_entity = commands.spawn(MapNode::new(x_position, y_position)).id();
+                    nodes.insert((x, y), node_entity); // Store entity with grid position
+                    self.node_list.insert((x,y),node_entity); // Can i make nodes and node list the same thing??
+                }
+            }
+        }
         
-        commands.entity(node_b).insert(MapNode {
-            neighbors: HashMap::from([
-                (PacManDirection::Left, Some(node_a)),
-                (PacManDirection::Down, None),
-                (PacManDirection::Up, Some(node_d)),
-                (PacManDirection::Right, None),
-            ]),
-            ..MapNode::new(0.0, -80.0)
-        });
-        
-        commands.entity(node_c).insert(MapNode {
-            neighbors: HashMap::from([
-                (PacManDirection::Up, Some(node_f)),
-                (PacManDirection::Right, Some(node_d)),
-                (PacManDirection::Down, Some(node_a)),
-                (PacManDirection::Left, None),
-            ]),
-            ..MapNode::new(-80.0, 0.0)
-        });
-        
-        commands.entity(node_d).insert(MapNode {
-            neighbors: HashMap::from([
-                (PacManDirection::Up, None),
-                (PacManDirection::Left, Some(node_c)),
-                (PacManDirection::Right, Some(node_e)),
-                (PacManDirection::Down, Some(node_b)),
-            ]),
-            ..MapNode::new(0.0, 0.0)
-        });
-        
-        commands.entity(node_e).insert(MapNode {
-            neighbors: HashMap::from([
-                (PacManDirection::Left, Some(node_d)),
-                (PacManDirection::Down, None),
-                (PacManDirection::Up, Some(node_g)),
-                (PacManDirection::Right, None),
-            ]),
-            ..MapNode::new(80.0, 0.0)
-        });
-        
-        commands.entity(node_f).insert(MapNode {
-            neighbors: HashMap::from([
-                (PacManDirection::Up, None),
-                (PacManDirection::Right, Some(node_g)),
-                (PacManDirection::Down, Some(node_c)),
-                (PacManDirection::Left, None),
-            ]),
-            ..MapNode::new(-80.0, 160.0)
-        });
-        
-        commands.entity(node_g).insert(MapNode {
-            neighbors: HashMap::from([
-                (PacManDirection::Up, None),
-                (PacManDirection::Left, Some(node_f)),
-                (PacManDirection::Right, None),
-                (PacManDirection::Down, Some(node_e)),
-            ]),
-            ..MapNode::new(80.0, 160.0)
-        });
     }
 }
 
 // Systems to Render Nodes on Screen
-pub fn setup_node_group(mut commands: Commands, mut node_group: ResMut<NodeGroup>) {
-    node_group.setup_test_nodes(&mut commands);
+pub fn load_maze(mut commands: Commands) {
+    match Maze::new() {
+        Ok(maze) => commands.insert_resource(maze),
+        Err(e) => eprintln!("Failed to load maze: {}", e),
+    }
+}
+
+// Define a helper function to find the next node in a direction
+pub fn find_next_node(
+    start_x: usize,
+    start_y: usize,
+    dx: isize,
+    dy: isize,
+    maze: &Maze,
+    nodes: &HashMap<(usize, usize), Entity>
+) -> Option<Entity> {
+    let (mut x, mut y) = (start_x as isize, start_y as isize);
+    loop {
+        x += dx;
+        y += dy;
+
+        // Check bounds
+        if x < 0 || y < 0 || x as usize >= maze.grid[0].len() || y as usize >= maze.grid.len() {
+            return None;
+        }
+
+        // Check if the cell is a node
+        let (ux, uy) = (x as usize, y as usize);
+        if maze.grid[uy][ux] == MazeCell::Node {
+            return nodes.get(&(ux, uy)).copied();
+        }
+    }
+}
+
+// Define neighbors by checking adjacent cells
+pub fn assign_neighbors(
+    maze: Res<Maze>,
+    map_nodes: Res<NodeGroup>,
+    mut query: Query<&mut MapNode>,
+) {
+    for (&(x, y), &node_entity) in map_nodes.node_list.iter() {
+        if let Ok(mut node) = query.get_mut(node_entity) {
+            // Check each direction and assign neighbors if found
+            if let Some(up_neighbor) = find_next_node(x, y, 0, -1, &maze, &map_nodes.node_list) {
+                node.neighbors.insert(PacManDirection::Up, Some(up_neighbor));
+            }
+            if let Some(down_neighbor) = find_next_node(x, y, 0, 1, &maze, &map_nodes.node_list) {
+                node.neighbors.insert(PacManDirection::Down, Some(down_neighbor));
+            }
+            if let Some(left_neighbor) = find_next_node(x, y, -1, 0, &maze, &map_nodes.node_list) {
+                node.neighbors.insert(PacManDirection::Left, Some(left_neighbor));
+            }
+            if let Some(right_neighbor) = find_next_node(x, y, 1, 0, &maze, &map_nodes.node_list) {
+                node.neighbors.insert(PacManDirection::Right, Some(right_neighbor));
+            }
+        }
+    }
+}
+
+//
+pub fn maze_to_nodes(
+    mut commands: Commands,
+    mut node_group: ResMut<NodeGroup>,
+    maze: Res<Maze>,
+) {
+    node_group.setup_nodes(commands, maze);
 }
 
 pub fn render_nodes_as_quads(
@@ -159,10 +209,10 @@ pub fn render_nodes_as_quads(
             sprite: Sprite {
                 color: RED,
                 custom_size: Some(Vec2::splat(16.0)), // Adjust size as needed
-                ..Default::default()
+                ..default()
             },
             transform: Transform::from_translation(Vec3::new(node.position.x, node.position.y, 0.5)),
-            ..Default::default()
+            ..default()
         });
 
         // Draw lines to each neighbor using a quad
@@ -188,14 +238,14 @@ pub fn render_nodes_as_quads(
                     sprite: Sprite {
                         color: Color::WHITE,
                         custom_size: Some(Vec2::new(length, 2.0)), // Thin line, adjust thickness if needed
-                        ..Default::default()
+                        ..default()
                     },
                     transform: Transform {
                         translation: Vec3::new(midpoint.x, midpoint.y, 0.5),
                         rotation: Quat::from_rotation_z(angle),
-                        ..Default::default()
+                        ..default()
                     },
-                    ..Default::default()
+                    ..default()
                 });
             }
         }
