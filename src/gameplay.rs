@@ -48,6 +48,7 @@ pub fn pacman_node_based_movement_system(
     time: Res<Time>, 
     mut pacman_query: Query<(&mut Pacman, &mut Transform)>,
     node_query: Query<&MapNode>,
+    node_group: Res<NodeGroup>, // Adding NodeGroup here to access `node_list`
 ) {
     for (mut pacman, mut transform) in pacman_query.iter_mut() {
         // Calculate incremental movement based on direction and speed
@@ -73,6 +74,36 @@ pub fn pacman_node_based_movement_system(
                     pacman.current_node = target_node;
                     pacman.node_position = node.position;
 
+                    // Check if the node is a portal
+                    if node.is_portal {
+                        
+                        println!("Arrived at Portal");
+                        let grid_x = ((node.position.x + X_OFFSET) / TILE_SIZE) as usize;
+                        let grid_y = ((node.position.y - Y_OFFSET) / TILE_SIZE) as usize;
+
+                        println!("Current Node: {:?}", pacman.node_position);
+                        
+                        if let Some(opposite_position) = find_opposite_portal(&node) {
+
+                            println!("Ran exit finding function");
+                            
+                            let opp_grid_x = ((opposite_position.x - X_OFFSET) / TILE_SIZE) as usize;
+                            let opp_grid_y = ((opposite_position.y - Y_OFFSET) / -TILE_SIZE) as usize;
+                            println!("Came up with Opposite Node x, y: {},{}",opp_grid_x,opp_grid_y);
+                            println!("Opposite Node Found: {:?}", node_group.node_list.get(&(opp_grid_x as usize, opp_grid_y as usize)));
+                            
+                            if let Some(&opposite_entity) = node_group.node_list.get(&(opp_grid_x as usize, opp_grid_y as usize)) {
+                                println!("Found opposite portal");
+                                // Transport Pac-Man to the opposite portal node
+                                if let Ok(opposite_node) = node_query.get(opposite_entity) {
+                                    transform.translation = Vec3::new(opposite_node.position.x, opposite_node.position.y, transform.translation.z);
+                                    pacman.current_node = opposite_entity; // Set to the opposite node's entity
+                                    pacman.node_position = opposite_node.position;
+                                }
+                            }
+                        }
+                    }
+
                     // Apply queued direction if valid; otherwise, maintain the current direction or stop
                     if let Some(queued_direction) = pacman.queued_direction {
                         if pacman.valid_direction(queued_direction, &node_query) {
@@ -80,21 +111,6 @@ pub fn pacman_node_based_movement_system(
                             pacman.queued_direction = None;
                         }
                     }
-
-                    // Set the next target based on current direction, or stop if there is none
-                    /*
-                    let new_target = pacman.get_new_target(pacman.node_direction, &node_query);
-                    if new_target != pacman.current_node {
-                        // pacman.current_node = new_target;
-                        pacman.target_node = new_target;
-                    } else {
-                        pacman.node_direction = PacManDirection::Stop;
-                    }
-                    
-                    if !pacman.valid_direction(pacman.node_direction, &node_query) {
-                        pacman.node_direction = PacManDirection::Stop;
-                    }
-                    */
                 }
             }
         }/* else {

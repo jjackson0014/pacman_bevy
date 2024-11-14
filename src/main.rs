@@ -25,6 +25,14 @@ mod prelude {
     pub const SCREEN_WIDTH: f32 = 464.0;
     pub const SCREEN_HEIGHT: f32 = 512.0;
 
+    pub const LEFT_BOUND: f32 = (-SCREEN_WIDTH / 2.0) + 16.0;
+    pub const TOP_BOUND: f32 = (SCREEN_HEIGHT / 2.0) - 16.0;
+    pub const RIGHT_BOUND: f32 = (SCREEN_WIDTH / 2.0) - 16.0;
+    pub const BOTTOM_BOUND: f32 = (-SCREEN_HEIGHT / 2.0) + 16.0;
+
+    pub const X_OFFSET: f32 = -SCREEN_WIDTH / 2.0 + TILE_SIZE;
+    pub const Y_OFFSET: f32 = SCREEN_HEIGHT / 2.0 - TILE_SIZE;
+
     // Colors
     pub const YELLOW: Color = Color::srgb(1.0, 1.0, 0.0);
     pub const WHITE: Color = Color::srgb(255.0, 255.0, 255.0);
@@ -56,6 +64,7 @@ pub fn main() {
                 // node::setup_node_group,
                 node::maze_to_nodes,
                 node::assign_neighbors,
+                node::identify_portal_nodes,
                 node::render_nodes_as_quads,
                 spawn_camera,
                 pacman::Pacman::spawn_pacman

@@ -70,6 +70,7 @@ impl Maze {
 pub struct MapNode {
     pub position: Vec2,
     pub neighbors: HashMap<PacManDirection, Option<Entity>>, // Neighbor nodes
+    pub is_portal: bool,
 }
 
 impl MapNode {
@@ -82,6 +83,7 @@ impl MapNode {
                 (PacManDirection::Left, None),
                 (PacManDirection::Right, None),
             ]),
+            is_portal: false,
         }
     }
 }
@@ -89,7 +91,7 @@ impl MapNode {
 // Group Nodes together
 #[derive(Resource)]
 pub struct NodeGroup {
-    node_list: HashMap<(usize, usize), Entity>,
+    pub node_list: HashMap<(usize, usize), Entity>,
 }
 
 impl NodeGroup {
@@ -104,9 +106,6 @@ impl NodeGroup {
         mut commands: Commands, 
         maze: Res<Maze>
     ) {
-        // Determine offsets for each tile
-        let x_offset = -SCREEN_WIDTH / 2.0 + TILE_SIZE;
-        let y_offset = SCREEN_HEIGHT / 2.0 - TILE_SIZE;
 
         let mut nodes = HashMap::new(); // Store nodes by (x, y) positions
 
@@ -114,12 +113,13 @@ impl NodeGroup {
         for (y, row) in maze.grid.iter().enumerate() {
             for (x, cell) in row.iter().enumerate() {
                 if *cell == MazeCell::Node {
-                    let x_position = x as f32 * TILE_SIZE + x_offset;
-                    let y_position = -(y as f32 * TILE_SIZE) + y_offset;
+                    let x_position = x as f32 * TILE_SIZE + X_OFFSET;
+                    let y_position = -(y as f32 * TILE_SIZE) + Y_OFFSET;
                     
                     let node_entity = commands.spawn(MapNode::new(x_position, y_position)).id();
                     nodes.insert((x, y), node_entity); // Store entity with grid position
                     self.node_list.insert((x,y),node_entity); // Can i make nodes and node list the same thing??
+                    println!("Inserted node into node list X,Y {},{}",x,y);
                 }
             }
         }
@@ -133,6 +133,15 @@ pub fn load_maze(mut commands: Commands) {
         Ok(maze) => commands.insert_resource(maze),
         Err(e) => eprintln!("Failed to load maze: {}", e),
     }
+}
+
+//
+pub fn maze_to_nodes(
+    mut commands: Commands,
+    mut node_group: ResMut<NodeGroup>,
+    maze: Res<Maze>,
+) {
+    node_group.setup_nodes(commands, maze);
 }
 
 // Define a helper function to find the next node in a direction
@@ -187,14 +196,67 @@ pub fn assign_neighbors(
     }
 }
 
-//
-pub fn maze_to_nodes(
-    mut commands: Commands,
-    mut node_group: ResMut<NodeGroup>,
-    maze: Res<Maze>,
+// Portals
+pub fn identify_portal_nodes (
+    map_nodes: Res<NodeGroup>,
+    mut query: Query<&mut MapNode>,
 ) {
-    node_group.setup_nodes(commands, maze);
+    // Maps will always be desined so that valid portals are nodes that are stationed along the wall
+    // This is controlled/checked by the map i.e. no portals on corners, etc
+
+    for (&(_x, _y), &node_entity) in map_nodes.node_list.iter() {
+        if let Ok(mut node) = query.get_mut(node_entity) {
+            if node.position.x == LEFT_BOUND {
+                node.is_portal = true;
+                println!("Identified Left-Side Portal");
+            }
+
+            if node.position.x == RIGHT_BOUND {
+                node.is_portal = true;
+                println!("Identified Right-Side Portal");
+            }
+
+            if node.position.y == TOP_BOUND {
+                node.is_portal = true;
+                println!("Identified Top-Side Portal");
+            }
+
+            if node.position.y == BOTTOM_BOUND {
+                node.is_portal = true;
+                println!("Identified Bottom-Side Portal");
+            }
+
+        }
+    }
 }
+
+// Lifetime - suggested by rustanalyzer - honestly not 100%
+// sure on this but <'a> is like a lifetime "tag" to say every input has the same
+// Lifetime
+pub fn find_opposite_portal(
+    current_node: &MapNode,
+) -> Option<Vec2> {
+    let x = current_node.position.x;
+    let y = current_node.position.y;
+
+    println!("Current Node X,Y {},{}",x,y);
+
+    let opposite_position = if x == LEFT_BOUND {
+        Vec2::new(RIGHT_BOUND, y)
+    } else if x == RIGHT_BOUND {
+        Vec2::new(LEFT_BOUND, y)
+    } else if y == TOP_BOUND {
+        Vec2::new(x, BOTTOM_BOUND)
+    } else if y == BOTTOM_BOUND {
+        Vec2::new(x, TOP_BOUND)
+    } else {
+        return None; // Not a portal node
+    };
+
+    Some(opposite_position)
+}
+
+// pub fn portal transport
 
 pub fn render_nodes_as_quads(
     mut commands: Commands,
@@ -228,11 +290,13 @@ pub fn render_nodes_as_quads(
                 let angle = line_direction.y.atan2(line_direction.x);
 
                 // Spawn a quad as a line
-                // Debugging output for line rendering between nodes
+                // Debugging output for line rendering between 
+                /*
                 println!(
                     "Drawing line from ({}, {}) to ({}, {})",
                     start.x, start.y, end.x, end.y
                 );
+                */
 
                 commands.spawn(SpriteBundle {
                     sprite: Sprite {
