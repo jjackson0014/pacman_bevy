@@ -22,41 +22,102 @@ impl PacManDirection {
     }
 }
 
+// Pellets
+#[derive(Bundle)]
+pub struct PelletBundle {
+    pellet: Pellet,
+    sprite: SpriteBundle,
+}
+
+#[derive(Component)]
+pub struct Pellet {
+    pub is_power: bool,
+    pub color: Color,
+    pub pellet_radius: f32,
+    pub collide_radius: f32,
+    pub base_points: i32,
+    pub is_eaten: bool,
+    pub flashing_off: bool,
+    pub flash_time: f32,
+    pub self_timer: f32,
+}
+
+impl Pellet {
+    pub fn new(is_power: bool) -> Self {
+
+        let size = if is_power {
+            8.0 * (TILE_SIZE / 16.0)
+        } else {
+            4.0 * (TILE_SIZE / 16.0)
+        };
+
+        let base_points = if is_power {50} else {10};
+
+        let flash_time = if is_power {0.2} else {0.0};
+
+        Pellet { 
+            is_power,
+            color: WHITE,
+            pellet_radius: size,
+            collide_radius: size,
+            base_points: base_points,
+            is_eaten: false,
+            flashing_off: false,
+            flash_time: flash_time,
+            self_timer: 0.0,
+        }
+        
+    }
+
+    // pub fn flash_pellets(&self, tick) {}
+
+}
+
+#[derive(Component)]
+pub struct PowerPellet;
+
 // Create a maze resource to be used in node building
 // Define Cell Types
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum MazeCell {
     Empty,
     Node,
-    Path,
+    Path {has_pellet: bool},
+    PowerPellet
 }
 
 #[derive(Debug, Clone, PartialEq, Resource)]
 pub struct Maze {
-    grid: Vec<Vec<MazeCell>>,
+    grid: HashMap<(usize, usize), MazeCell>,
 }
 
 impl Maze {
     
     pub fn new() -> io::Result<Self> {
-        Self::read_map("assets/mazes/maze_test.txt")
+        Self::read_map("assets/mazes/maze1.txt")
     }
 
     pub fn read_map(filename: &str) -> io::Result<Self> {
         let file = File::open(filename)?;
         let reader = io::BufReader::new(file);
 
-        let mut grid = Vec::new();
+        let mut grid = HashMap::new();
 
-        for line in reader.lines() {
-            let line = line?.trim().to_string();  // Trim whitespace around each line
-            let row: Vec<MazeCell> = line.split_whitespace().map(|c| match c {
-                "X" => MazeCell::Empty,
-                "+" => MazeCell::Node,
-                "." => MazeCell::Path,
-                _ => MazeCell::Empty, // Default to empty for unrecognized chars
-            }).collect();
-            grid.push(row);
+        for (y, line) in reader.lines().enumerate() {
+            let line = line?.trim().to_string();  
+            for (x, c) in line.split_whitespace().enumerate() {
+                let cell = match c {
+                    "X" => MazeCell::Empty,
+                    "+" => MazeCell::Node,
+                    "n" => MazeCell::Node,
+                    "|" => MazeCell::Path { has_pellet: false },
+                    "-" => MazeCell::Path { has_pellet: false },
+                    "." => MazeCell::Path { has_pellet: true },
+                    "P" => MazeCell::PowerPellet,
+                    _ => MazeCell::Empty, 
+                };
+                grid.insert((x, y), cell);
+            }
         }
         
         Ok(Maze { grid })
@@ -107,20 +168,16 @@ impl NodeGroup {
         maze: Res<Maze>
     ) {
 
-        let mut nodes = HashMap::new(); // Store nodes by (x, y) positions
+        // let mut nodes = HashMap::new(); // Store nodes by (x, y) positions
 
-        // Create nodes for each walkable cell and store their entities
-        for (y, row) in maze.grid.iter().enumerate() {
-            for (x, cell) in row.iter().enumerate() {
-                if *cell == MazeCell::Node {
-                    let x_position = x as f32 * TILE_SIZE + X_OFFSET;
-                    let y_position = -(y as f32 * TILE_SIZE) + Y_OFFSET;
-                    
-                    let node_entity = commands.spawn(MapNode::new(x_position, y_position)).id();
-                    nodes.insert((x, y), node_entity); // Store entity with grid position
-                    self.node_list.insert((x,y),node_entity); // Can i make nodes and node list the same thing??
-                    println!("Inserted node into node list X,Y {},{}",x,y);
-                }
+        // Create nodes for each `MazeCell::Node` or `MazeCell::PowerPellet`
+        for (&(x, y), &cell) in maze.grid.iter() {
+            if matches!(cell, MazeCell::Node | MazeCell::PowerPellet) {
+                let x_position = x as f32 * TILE_SIZE + X_OFFSET;
+                let y_position = -(y as f32 * TILE_SIZE) + Y_OFFSET;
+                
+                let node_entity = commands.spawn(MapNode::new(x_position, y_position)).id();
+                self.node_list.insert((x, y), node_entity);
             }
         }
         
@@ -154,19 +211,39 @@ pub fn find_next_node(
     nodes: &HashMap<(usize, usize), Entity>
 ) -> Option<Entity> {
     let (mut x, mut y) = (start_x as isize, start_y as isize);
+
     loop {
         x += dx;
         y += dy;
 
-        // Check bounds
-        if x < 0 || y < 0 || x as usize >= maze.grid[0].len() || y as usize >= maze.grid.len() {
+        // Convert (x, y) back to usize for grid lookup
+        if x < 0 || y < 0 {
             return None;
         }
-
-        // Check if the cell is a node
         let (ux, uy) = (x as usize, y as usize);
-        if maze.grid[uy][ux] == MazeCell::Node {
-            return nodes.get(&(ux, uy)).copied();
+
+        // Check if the cell exists in the grid
+        match maze.grid.get(&(ux, uy)) {
+            Some(MazeCell::Node) | Some(MazeCell::Path { has_pellet: _ }) | 
+            Some(MazeCell::PowerPellet)=> {
+                // Return the next node if it's a valid path or node
+                if let Some(entity) = nodes.get(&(ux, uy)) {
+                    return Some(*entity);
+                }
+            }
+            Some(MazeCell::Empty) | None => {
+                // Stop if we encounter an empty cell or go out of bounds
+                return None;
+            }
+            _ => {} // Continue if the cell is not a node or path
+        }
+
+        // Boundary check in case we move out of bounds
+        let max_x = maze.grid.keys().map(|(x, _)| *x).max().unwrap_or(0);
+        let max_y = maze.grid.keys().map(|(_, y)| *y).max().unwrap_or(0);
+
+        if ux >= max_x || uy >= max_y {
+            return None;
         }
     }
 }
@@ -269,7 +346,7 @@ pub fn render_nodes_as_quads(
 
         commands.spawn(SpriteBundle {
             sprite: Sprite {
-                color: RED,
+                color: WHITE,
                 custom_size: Some(Vec2::splat(16.0)), // Adjust size as needed
                 ..default()
             },
@@ -278,6 +355,7 @@ pub fn render_nodes_as_quads(
         });
 
         // Draw lines to each neighbor using a quad
+        /*
         for neighbor in node.neighbors.values().flatten() {
             if let Ok((_, neighbor_node)) = query.get(*neighbor) {
                 let start = Vec2::new(node.position.x, node.position.y);
@@ -311,6 +389,79 @@ pub fn render_nodes_as_quads(
                     },
                     ..default()
                 });
+            }
+        }*/
+    }
+    
+}
+
+// Pellets
+pub fn render_pellets(
+    mut commands: Commands,
+    maze: Res<Maze>,
+) {
+    for (&(x, y), &cell) in maze.grid.iter() {
+        if let Some(pellet) = match cell {
+            MazeCell::Path { has_pellet: true } => Some(Pellet::new(false)),
+            MazeCell::PowerPellet => Some(Pellet::new(true)),
+            _ => None,
+        } {
+
+            let splat_size = pellet.pellet_radius;
+            println!("Pellet at X, Y (grid) {}, {}",x,y);
+            println!(
+                "Pellet at X, Y (trans) {}, {}",
+                x as f32 * TILE_SIZE + X_OFFSET,
+                -(y as f32 * TILE_SIZE) + Y_OFFSET
+            );
+            println!("Splat Size {}",splat_size);
+
+            commands.spawn(
+                PelletBundle{
+                    pellet: pellet,
+                    sprite: SpriteBundle {
+                        sprite: Sprite {
+                            color: WHITE,
+                            custom_size: Some(Vec2::splat(splat_size)), // Adjust size as needed
+                            ..default()
+                        },
+                        transform: Transform::from_translation(Vec3::new(
+                            x as f32 * TILE_SIZE + X_OFFSET,
+                            -(y as f32 * TILE_SIZE) + Y_OFFSET,
+                            2.0,
+                        )),
+                        ..default()
+                    }
+                }
+            );
+        }
+    }
+}
+
+pub fn power_pellet_flash_system(
+    time: Res<Time>,
+    mut query: Query<(&mut Pellet, &mut Sprite), With<Pellet>>,
+) {
+    for (mut pellet, mut sprite) in query.iter_mut() {
+        // Only apply flashing to power pellets
+        if pellet.is_power && !pellet.is_eaten {
+            // Increment the timer by the elapsed time since the last frame
+            pellet.self_timer += time.delta_seconds();
+
+            // Check if the timer has reached or exceeded the flash time
+            if pellet.self_timer >= pellet.flash_time {
+                // Toggle visibility
+                pellet.flashing_off = !pellet.flashing_off;
+                
+                // Update the sprite's color to match visibility
+                sprite.color = if !pellet.flashing_off {
+                    pellet.color // Original color when visible
+                } else {
+                    Color::NONE // Transparent when invisible
+                };
+
+                // Reset the self_timer to start counting for the next flash
+                pellet.self_timer = 0.0;
             }
         }
     }

@@ -4,6 +4,7 @@ use map::Map;
 mod node;
 use node::NodeGroup;
 use node::Maze;
+use node::Pellet;
 mod pacman;
 use pacman::Pacman;
 mod gameplay;
@@ -59,13 +60,14 @@ pub fn main() {
         .add_systems(
             Startup, 
             (
-                map::setup_map_system,
+                // map::setup_map_system,
                 node::load_maze,
                 // node::setup_node_group,
                 node::maze_to_nodes,
                 node::assign_neighbors,
                 node::identify_portal_nodes,
                 node::render_nodes_as_quads,
+                node::render_pellets,
                 spawn_camera,
                 pacman::Pacman::spawn_pacman
             ).chain()
@@ -74,6 +76,7 @@ pub fn main() {
             gameplay::pacman_input_system,
             //gameplay::pacman_collision_based_movement_system
             gameplay::pacman_node_based_movement_system,
+            node::power_pellet_flash_system,
         )
         //.chain()
         )
