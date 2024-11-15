@@ -56,6 +56,7 @@ impl Pacman {
     ) {
         if let Some((node_entity, node)) = node_query.iter().next() {
             let spawn_node_position = node.position;
+            println!("Pacman spawned on node: {:?}", spawn_node_position);
             commands.spawn((
                 Pacman::new(spawn_node_position, node_entity, None),
                 SpriteBundle {

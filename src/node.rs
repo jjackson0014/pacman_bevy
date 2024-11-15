@@ -35,7 +35,7 @@ pub struct Pellet {
     pub color: Color,
     pub pellet_radius: f32,
     pub collide_radius: f32,
-    pub base_points: i32,
+    pub base_points: u32,
     pub is_eaten: bool,
     pub flashing_off: bool,
     pub flash_time: f32,
@@ -285,22 +285,22 @@ pub fn identify_portal_nodes (
         if let Ok(mut node) = query.get_mut(node_entity) {
             if node.position.x == LEFT_BOUND {
                 node.is_portal = true;
-                println!("Identified Left-Side Portal");
+                // println!("Identified Left-Side Portal");
             }
 
             if node.position.x == RIGHT_BOUND {
                 node.is_portal = true;
-                println!("Identified Right-Side Portal");
+                // println!("Identified Right-Side Portal");
             }
 
             if node.position.y == TOP_BOUND {
                 node.is_portal = true;
-                println!("Identified Top-Side Portal");
+                // println!("Identified Top-Side Portal");
             }
 
             if node.position.y == BOTTOM_BOUND {
                 node.is_portal = true;
-                println!("Identified Bottom-Side Portal");
+                // println!("Identified Bottom-Side Portal");
             }
 
         }
@@ -316,7 +316,7 @@ pub fn find_opposite_portal(
     let x = current_node.position.x;
     let y = current_node.position.y;
 
-    println!("Current Node X,Y {},{}",x,y);
+    // println!("Current Node X,Y {},{}",x,y);
 
     let opposite_position = if x == LEFT_BOUND {
         Vec2::new(RIGHT_BOUND, y)
@@ -342,7 +342,7 @@ pub fn render_nodes_as_quads(
     for (_, node) in query.iter() {
         // Draw each node as a circle
         // Debugging output for node positions
-        println!("Rendering Node at Position X: {} Y: {}", node.position.x, node.position.y);
+        // println!("Rendering Node at Position X: {} Y: {}", node.position.x, node.position.y);
 
         commands.spawn(SpriteBundle {
             sprite: Sprite {
@@ -390,7 +390,8 @@ pub fn render_nodes_as_quads(
                     ..default()
                 });
             }
-        }*/
+        }
+        */
     }
     
 }
@@ -408,14 +409,15 @@ pub fn render_pellets(
         } {
 
             let splat_size = pellet.pellet_radius;
+            /*
             println!("Pellet at X, Y (grid) {}, {}",x,y);
             println!(
                 "Pellet at X, Y (trans) {}, {}",
                 x as f32 * TILE_SIZE + X_OFFSET,
                 -(y as f32 * TILE_SIZE) + Y_OFFSET
-            );
+            ); 
             println!("Splat Size {}",splat_size);
-
+            */
             commands.spawn(
                 PelletBundle{
                     pellet: pellet,
